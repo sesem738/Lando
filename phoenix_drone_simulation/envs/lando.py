@@ -1,5 +1,5 @@
 import numpy as np
-from phoenix_drone_simulation.envs.base import DroneLandoBaseEnv
+from phoenix_drone_simulation.envs.base_lando import DroneLandoBaseEnv
 from phoenix_drone_simulation.envs.utils import deg2rad
 
 
@@ -302,7 +302,7 @@ class DroneCircleSimpleEnv(LandoBaseEnv):
 class LandoEnv(LandoBaseEnv):
     def __init__(self,
                  aggregate_phy_steps: int = 2,  # sub-steps used to calculate motor dynamics
-                 control_mode: str = 'AttituteRate',
+                 control_mode: str = 'AttitudeRate',
                  **kwargs):
         super(LandoEnv, self).__init__(
             aggregate_phy_steps=aggregate_phy_steps,

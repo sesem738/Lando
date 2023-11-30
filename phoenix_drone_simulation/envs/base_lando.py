@@ -207,6 +207,16 @@ class DroneLandoBaseEnv(gym.Env, abc.ABC):
         pb.loadURDF(os.path.join(get_assets_path(), "room_10x10.urdf"), useFixedBase=True)
         # random spawns
 
+        # Load LeoRover
+        startPos = (0,0,0.2)
+        startRPY = (0,0,0)
+        leo_path = "leo_description/urdf/leo.urdf"
+        leoId = self.bc.loadURDF(os.path.join(get_assets_path(), leo_path),
+                    startPos,
+                    pb.getQuaternionFromEuler(startRPY),
+                    flags=pb.URDF_USE_INERTIA_FROM_FILE)
+
+
         if self.drone_model == 'cf21x_bullet':
             self.drone = CrazyFlieBulletAgent(bc=self.bc, **self.agent_params)
         elif self.drone_model == 'cf21x_sys_eq':
