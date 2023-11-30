@@ -48,3 +48,13 @@ register(
     entry_point='phoenix_drone_simulation.envs.circle:DroneCircleBulletEnv',
     max_episode_steps=500,
 )
+
+# ==================
+#   Landing Task
+# ==================
+
+register(
+    id='LandoEnv-v0',
+    entry_point='phoenix_drone_simulation.envs.lando:LandoEnv',
+    max_episode_steps=500,
+)
