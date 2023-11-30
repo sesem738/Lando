@@ -205,13 +205,12 @@ class DroneLandoBaseEnv(gym.Env, abc.ABC):
         self.PLANE_ID = self.bc.loadURDF("plane.urdf")
         # Load 10x10 Walls
         pb.loadURDF(os.path.join(get_assets_path(), "room_10x10.urdf"), useFixedBase=True)
-        # random spawns
 
         # Load LeoRover
         startPos = (0,0,0.2)
         startRPY = (0,0,0)
         leo_path = "leo_description/urdf/leo.urdf"
-        leoId = self.bc.loadURDF(os.path.join(get_assets_path(), leo_path),
+        self.leoId = self.bc.loadURDF(os.path.join(get_assets_path(), leo_path),
                     startPos,
                     pb.getQuaternionFromEuler(startRPY),
                     flags=pb.URDF_USE_INERTIA_FROM_FILE)
@@ -235,12 +234,14 @@ class DroneLandoBaseEnv(gym.Env, abc.ABC):
             time_step=self.time_step,  # 1 / sim_frequency
         )
 
-        # Setup task specifics
-        self._setup_task_specifics()
+        # === Set camera position
+        self.bc.resetDebugVisualizerCamera(
+            cameraTargetPosition=(0.0, 0.0, 0.0),
+            cameraDistance=1.5,
+            cameraYaw=90,
+            cameraPitch=-70
+        )
 
-    @abc.abstractmethod
-    def _setup_task_specifics(self):
-        raise NotImplementedError
 
     def apply_domain_randomization(self) -> None:
         """ Apply domain randomization at the start of every new episode.

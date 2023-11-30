@@ -42,19 +42,6 @@ class LandoBaseEnv(DroneLandoBaseEnv):
         self.y_lim = 0.10
         self.z_lim = 1.20
 
-        # === Reference trajectory
-        self.episode_length = 500
-        self.circle_time = 3  # [s]
-        circle_radius = 0.25  # [m]
-        self.num_ref_points = N = self.circle_time * observation_frequency  # [1]
-        ts = 2 * np.pi * np.arange(self.num_ref_points) / self.num_ref_points
-
-        self.ref_offset = 0  # set by task_specific_reset()-method
-        self.ref = np.zeros((len(ts), 3))
-        self.ref[:, 2] = 1.  # z-position
-        self.ref[:, 1] = circle_radius * np.sin(ts)  # y-position
-        self.ref[:, 0] = circle_radius * (1 - np.cos(ts))  # x-position
-
         # task specific parameters - init drone state
         init_xyz = np.array([0, 0, 1], dtype=np.float32)
         init_rpy = np.zeros(3)
@@ -77,41 +64,6 @@ class LandoBaseEnv(DroneLandoBaseEnv):
             **kwargs
         )
 
-    def _setup_task_specifics(self):
-        """Initialize task specifics. Called by _setup_simulation()."""
-        target_visual = self.bc.createVisualShape(
-            self.bc.GEOM_SPHERE,
-            radius=0.02,
-            rgbaColor=[0.95, 0.1, 0.05, 0.4],
-        )
-        # Spawn visual without collision shape
-        self.target_body_id = self.bc.createMultiBody(
-            baseMass=0,
-            baseCollisionShapeIndex=-1,
-            baseVisualShapeIndex=target_visual,
-            basePosition=self.target_pos
-        )
-
-        # === Draw reference circle
-        for k in range(0, self.num_ref_points, 10):
-            self.bc.createMultiBody(
-                baseMass=0,
-                baseCollisionShapeIndex=-1,
-                baseVisualShapeIndex=self.bc.createVisualShape(
-                    self.bc.GEOM_SPHERE,
-                    radius=0.003,
-                    rgbaColor=[0.95, 0.15, 0.10, 0.7],
-                ),
-                basePosition=self.ref[k]
-            )
-
-        # === Set camera position
-        self.bc.resetDebugVisualizerCamera(
-            cameraTargetPosition=(0.0, 0.0, 0.0),
-            cameraDistance=1.5,
-            cameraYaw=90,
-            cameraPitch=-70
-        )
 
     def compute_done(self) -> bool:
         """Compute end of episode if dist(drone - ref) > d."""
@@ -131,7 +83,7 @@ class LandoBaseEnv(DroneLandoBaseEnv):
         self.target_pos = self.ref[t]
         # update target visual:
         self.bc.resetBasePositionAndOrientation(
-            self.target_body_id,
+            self.,
             posObj=self.target_pos,
             ornObj=(0, 0, 0, 1)
         )
