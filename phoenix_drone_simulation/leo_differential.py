@@ -31,6 +31,9 @@ ledId = bc.loadURDF(os.path.join(get_assets_path(), leo_path),
     p.getQuaternionFromEuler(startRPY), 
     flags=p.URDF_USE_INERTIA_FROM_FILE)
 
+wheels = [2,3,5,6]
+wheelVelocities = [0, 0, 0, 0]
+
 # === Set camera position
 bc.resetDebugVisualizerCamera(
     cameraTargetPosition=(0.0, 0.0, 0.0),
@@ -41,4 +44,5 @@ bc.resetDebugVisualizerCamera(
 
 for i in range (10000):
     bc.stepSimulation()
+    
     time.sleep(1./240.)
