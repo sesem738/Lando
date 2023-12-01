@@ -106,3 +106,48 @@ class OUNoise:
         dx = self.theta * (self.mu - x) + self.sigma * np.random.randn(len(x))
         self.state = x + dx
         return self.state
+
+def wrap_to_pi(angle):
+    return (angle + np.pi) % (2 * np.pi) - np.pi
+
+def differential_drive(current_pos, target_pos, current_heading, p_gain=(0.5, 10),
+                       ang_thresh=0.005):
+    # Robot parameters
+    wheel_base = 0.447
+    wheel_radius = 0.065
+
+    # Position and heading difference
+    dx = target_pos[0] - current_pos[0]
+    dy = target_pos[1] - current_pos[1]
+    dtheta = wrap_to_pi(np.arctan2(dy, dx) - (current_heading))
+    # print(rad2deg(dtheta))
+    if (dtheta < ang_thresh) & (dtheta > -ang_thresh):
+        dtheta = 0.0
+
+    # Calculate linear and angular velocities
+    linear_velocities = np.sqrt(dx ** 2 + dy ** 2) * p_gain[0]
+    angular_velocities = dtheta * p_gain[1]
+
+    # Calculate individual wheel speeds for a differential drive robot
+    left_speeds = (2 * linear_velocities + angular_velocities * wheel_base) / (2 * wheel_radius)
+    right_speeds = (2 * linear_velocities - angular_velocities * wheel_base) / (2 * wheel_radius)
+
+    # Scale speeds if necessary
+    # max_wheel_speed = max(np.max(np.abs(left_speeds)), np.max(np.abs(right_speeds)))
+    # if max_wheel_speed > max_speed:
+    #     scaling_factor = max_speed / max_wheel_speed
+    #     left_speeds *= scaling_factor
+    #     right_speeds *= scaling_factor
+
+    return np.stack((left_speeds, left_speeds, right_speeds, right_speeds), axis=-1)
+
+def lemniscate(a=np.sqrt(2), num_points=200):
+    # Generate theta values
+    theta = np.linspace(-np.pi / 2, 3 * np.pi / 2, num_points)
+    # Calculate x and y coordinates for the lemniscate curve
+    x = a * np.cos(theta) / (np.sin(theta) ** 2 + 1)
+    y = a * np.cos(theta) * np.sin(theta) / (np.sin(theta) ** 2 + 1)
+    z = y*0
+
+    return np.column_stack((x, y, z))
+
