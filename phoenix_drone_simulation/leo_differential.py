@@ -4,7 +4,7 @@ import numpy as np
 import pybullet as p
 import pybullet_data
 from pybullet_utils import bullet_client
-from phoenix_drone_simulation.envs.utils import rad2deg, lemniscate, differential_drive
+from phoenix_drone_simulation.envs.utils import rad2deg, differential_drive, generate_path
 
 def get_assets_path() -> str:
     r""" Returns the path to the files located in envs/data."""
@@ -41,13 +41,11 @@ leo = bc.loadURDF(os.path.join(get_assets_path(), leo_path),
     p.getQuaternionFromEuler(startRPY), 
     flags=p.URDF_USE_INERTIA_FROM_FILE)
 
-for i in range(p.getNumJoints(leo)):
-    print(p.getJointInfo(leo, i))
-
 wheels = [2,3,5,6]
 wheelVelocities = [0, 0, 0, 0]
 
-waypoints = lemniscate(a=4, num_points=100)
+path = generate_path(10)
+waypoints = path.circle()
 target_index = 0
 leo_target = waypoints[target_index]
 
@@ -63,7 +61,7 @@ target_body_id = bc.createMultiBody(
             basePosition=leo_target)
 
 # === Draw reference circle
-for k in range(0, 100, 5):
+for k in range(path.num_points):
     bc.createMultiBody(
         baseMass=0,
         baseCollisionShapeIndex=-1,
@@ -76,7 +74,7 @@ for k in range(0, 100, 5):
     )
 
 
-for i in range (10000):
+for i in range (100000):
     bc.stepSimulation()
      
     bc.resetBasePositionAndOrientation(
@@ -96,8 +94,10 @@ for i in range (10000):
         target_index += 1
         leo_target = waypoints[target_index]
     
+
+    
     # Two DOF PID Controller
-    wheelVelocities = differential_drive(leo_xyz, leo_target, yaw, (0.1, 0.5))
+    wheelVelocities = differential_drive(leo_xyz, leo_target, yaw, (0.2, 1.0))
     wheelVelocities = wheelVelocities.tolist()
 
     for i in range(len(wheels)):
