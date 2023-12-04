@@ -207,12 +207,13 @@ class DroneLandoBaseEnv(gym.Env, abc.ABC):
         pb.loadURDF(os.path.join(get_assets_path(), "room_10x10.urdf"), useFixedBase=True)
 
         # Load LeoRover
-        startPos = (0,0,0.2)
-        startRPY = (0,0,0)
+        self.startPos = (0,0,0.2)
+        self.startRPY = (0,0,0)
+        self.wheels = [2,3,5,6]
         leo_path = "leo_description/urdf/leo.urdf"
-        self.leoId = self.bc.loadURDF(os.path.join(get_assets_path(), leo_path),
-                    startPos,
-                    pb.getQuaternionFromEuler(startRPY),
+        self.leo = self.bc.loadURDF(os.path.join(get_assets_path(), leo_path),
+                    self.startPos,
+                    pb.getQuaternionFromEuler(self.startRPY),
                     flags=pb.URDF_USE_INERTIA_FROM_FILE)
 
 

@@ -2,7 +2,7 @@ import gym
 import time
 import phoenix_drone_simulation
 
-env = gym.make('DroneCircleBulletEnv-v0')
+env = gym.make('LandoEnv-v0')
 
 while True:
     done = False

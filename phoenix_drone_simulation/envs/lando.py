@@ -1,6 +1,7 @@
 import numpy as np
 from phoenix_drone_simulation.envs.base_lando import DroneLandoBaseEnv
 from phoenix_drone_simulation.envs.utils import deg2rad
+from phoenix_drone_simulation.envs.utils import differential_drive, generate_path
 
 
 class LandoBaseEnv(DroneLandoBaseEnv):
@@ -32,7 +33,7 @@ class LandoBaseEnv(DroneLandoBaseEnv):
         self.penalty_terminal = penalty_terminal
         self.penalty_velocity = penalty_velocity
 
-        self.done_dist_threshold = 0.25
+        self.done_dist_threshold = 100
 
         # === Costs: The following constants are used for cost calculation:
         self.vel_limit = 0.25  # [m/s]
@@ -47,6 +48,12 @@ class LandoBaseEnv(DroneLandoBaseEnv):
         init_rpy = np.zeros(3)
         init_xyz_dot = np.zeros(3)
         init_rpy_dot = np.zeros(3)
+
+        # Leo Trajectory
+        self.path = generate_path(10)
+        self.waypoints = self.path.circle()
+        self.target_index = 0
+        self.leo_target = self.waypoints[self.target_index]
 
         super(LandoBaseEnv, self).__init__(
             control_mode=control_mode,
@@ -65,28 +72,42 @@ class LandoBaseEnv(DroneLandoBaseEnv):
         )
 
 
-    def compute_done(self) -> bool:
-        """Compute end of episode if dist(drone - ref) > d."""
-        dist = np.linalg.norm(self.drone.xyz - self.target_pos)
-        done = True if dist > self.done_dist_threshold else False
-        return done
+    def _setup_task_specifics(self):
+        """Initialize task specifics. Called by _setup_simulation()."""
+        target_visual = self.bc.createVisualShape(
+            self.bc.GEOM_SPHERE,
+            radius=0.1,
+            rgbaColor=[1, 0.1, 0.05, 0.99],
+        )
+        target_body_id = self.bc.createMultiBody(
+            baseMass=0,
+            baseCollisionShapeIndex=-1,
+            baseVisualShapeIndex=target_visual,
+            basePosition=self.leo_target)
 
-    def compute_info(self) -> dict:
-        # state = self.drone.get_state()
-        c = 0.
-        info = {'cost': c}
-        return info
+        # === Draw reference circle
+        for k in range(self.path.num_points):
+            self.bc.createMultiBody(
+                baseMass=0,
+                baseCollisionShapeIndex=-1,
+                baseVisualShapeIndex=self.bc.createVisualShape(
+                    self.bc.GEOM_SPHERE,
+                    radius=0.05,
+                    rgbaColor=[0.0, 0.0, 1.0, 1],
+                ),
+                basePosition=self.waypoints[k]
+            )
+        
+        # === Set camera position
+        self.bc.resetDebugVisualizerCamera(
+            cameraTargetPosition=(0.0, 0.0, 0.0),
+            cameraDistance=1.5,
+            cameraYaw=90,
+            cameraPitch=-70
+        )
 
     def compute_observation(self) -> np.ndarray:
-        r"""Returns the current observation of the environment."""
-        t = (self.iteration // self.aggregate_phy_steps + self.ref_offset) % self.num_ref_points
-        self.target_pos = self.ref[t]
-        # update target visual:
-        self.bc.resetBasePositionAndOrientation(
-            self.,
-            posObj=self.target_pos,
-            ornObj=(0, 0, 0, 1)
-        )
+        self.set_leo_actions()
 
         if self.observation_noise > 0:  # add noise only for positive values
 
@@ -103,7 +124,7 @@ class LandoBaseEnv(DroneLandoBaseEnv):
                     dt=1 / self.SIM_FREQ
                 )
                 quat = np.asarray(self.bc.getQuaternionFromEuler(rpy))
-                error_to_ref = self.target_pos - xyz
+                error_to_ref = self.leo_xyz - xyz
                 self.state = np.concatenate(
                     [xyz, quat, vel, omega, self.drone.last_action])
             else:
@@ -111,7 +132,7 @@ class LandoBaseEnv(DroneLandoBaseEnv):
                 # This part runs with >100Hz, re-use Kalman Filter values:
                 xyz, quat, vel = self.state[0:3], self.state[3:7], self.state[
                                                                    7:10]
-                error_to_ref = self.ref[t] - xyz
+                error_to_ref = self.leo_xyz - xyz
                 # read Gyro data with >100 Hz and add noise:
                 omega = self.sensor_noise.add_noise_to_omega(
                     omega=self.drone.rpy_dot, dt=1 / self.SIM_FREQ)
@@ -128,11 +149,8 @@ class LandoBaseEnv(DroneLandoBaseEnv):
                                   error_to_ref])
         return obs
 
-    def compute_potential(self) -> float:
-        """Euclidean distance from current ron position to target position."""
-        return np.linalg.norm(self.drone.xyz - self.target_pos)
 
-    def compute_reward(self, action) -> float:
+    def compute_reward(self, action):
         # Determine penalties
         # spin_penalty = 1e-4 * np.linalg.norm(self.drone.rpy_dot)**2
         act_diff = action - self.last_action
@@ -154,16 +172,30 @@ class LandoBaseEnv(DroneLandoBaseEnv):
         dist = np.linalg.norm(self.drone.xyz - self.target_pos)
         reward = -dist - penalties
         return reward
+    
+    def set_leo_actions(self):
+        # Get the current position and orientation
+        self.leo_xyz, leo_w = self.bc.getBasePositionAndOrientation(self.leo)
+        # Calculate Distance
+        dist = np.linalg.norm(np.array(self.leo_target - self.leo_xyz))
+        yaw = self.bc.getEulerFromQuaternion(leo_w)[2]
 
-    def get_reference_trajectory(self, horizon):
-        r"""Returns N-steps of the reference trajectory for tracking."""
-        reference = np.zeros((13, horizon))
-        t = (self.iteration // self.aggregate_phy_steps + self.ref_offset) % self.num_ref_points
-        reference[:3] = self.ref[t:(t+horizon)].T
-        return reference
+        if dist < 0.15:
+            self.target_index += 1
+            self.leo_target = self.waypoints[self.target_index]
+
+        # Two DOF PID Controller
+        wheelVelocities = differential_drive(self.leo_xyz, self.leo_target, yaw, (0.2, 1.0))
+        wheelVelocities = wheelVelocities.tolist()
+
+        for i in range(len(self.wheels)):
+            self.bc.setJointMotorControl2(self.leo,
+                                self.wheels[i],
+                                self.bc.VELOCITY_CONTROL,
+                                targetVelocity=wheelVelocities[i],
+                                force=100)
 
     def task_specific_reset(self):
-
         # Note:
         #  - use copy since += operations are call by reference
         #  - init_xyz, init_xyz_dot, ... are set the SimOpt classes
@@ -171,42 +203,6 @@ class LandoBaseEnv(DroneLandoBaseEnv):
         xyz_dot = self.init_xyz_dot.copy()
         rpy_dot = self.init_rpy_dot.copy()
         quat = self.init_quaternion.copy()
-
-        if self.enable_reset_distribution:
-            # compute index where to position drone on reference circle:
-            self.ref_offset = np.random.randint(0, self.num_ref_points)
-            self.target_pos = self.ref[self.ref_offset]
-            pos = self.target_pos.copy()
-
-            pos_lim = 0.05  # should be at least 0.15 for hover task since position PID shoots up to (0,0,1.15)
-            pos += np.random.uniform(-pos_lim, pos_lim, size=3)
-
-            init_angle = deg2rad(20)  # default: 20°
-            rpy = np.random.uniform(-init_angle, init_angle, size=3)
-            yaw_init = 0.1 * np.pi  # use 2*pi as init
-            rpy[2] = np.random.uniform(-yaw_init, yaw_init)
-            quat = self.bc.getQuaternionFromEuler(rpy)
-
-            # set random initial velocities
-            vel_lim = 0.1  # default: 0.05
-            xyz_dot = xyz_dot + np.random.uniform(-vel_lim, vel_lim, size=3)
-
-            rpy_dot_lim = deg2rad(50)  # default: 50°/s
-            rpy_dot[:2] = np.random.uniform(-rpy_dot_lim, rpy_dot_lim, size=2)
-            rpy_dot[2] = np.random.uniform(-deg2rad(20), deg2rad(20))
-
-            # init low pass filter(s) with new values:
-            self.gyro_lpf.set(x=rpy_dot)
-
-            # set drone internals
-            self.drone.x = np.random.normal(self.drone.HOVER_X, scale=0.02,
-                                            size=(4,))
-            self.drone.y = self.drone.K * self.drone.x
-            self.drone.action_buffer = np.clip(
-                np.random.normal(self.drone.HOVER_ACTION, 0.02,
-                                 size=self.drone.action_buffer.shape), -1, 1)
-            self.drone.last_action = self.drone.action_buffer[-1, :]
-
 
         self.bc.resetBasePositionAndOrientation(
             self.drone.body_unique_id,
@@ -223,10 +219,31 @@ class LandoBaseEnv(DroneLandoBaseEnv):
         )
 
         self.bc.resetBasePositionAndOrientation(
-            self.target_body_id,
-            posObj=self.target_pos,
-            ornObj=(0, 0, 0, 1)
+            self.leo,
+            posObj=self.startPos,
+            ornObj=self.bc.getQuaternionFromEuler(self.startRPY)
         )
+
+    def compute_done(self) -> bool:
+        """Compute end of episode if dist(drone - ref) > d."""
+        dist = np.linalg.norm(self.drone.xyz - self.target_pos)
+        done = True if dist > self.done_dist_threshold else False
+        return done
+
+    def compute_info(self) -> dict:
+        # state = self.drone.get_state()
+        c = 0.
+        info = {'cost': c}
+        return info
+
+    def compute_potential(self) -> float:
+        """Euclidean distance from current ron position to target position."""
+        return np.linalg.norm(self.drone.xyz - self.target_pos)
+    
+    def get_reference_trajectory(self):
+        raise NotImplementedError
+    
+    
 
 
 """ ==================
