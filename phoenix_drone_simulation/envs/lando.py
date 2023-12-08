@@ -1,3 +1,4 @@
+import random
 import numpy as np
 from phoenix_drone_simulation.envs.base_lando import DroneLandoBaseEnv
 from phoenix_drone_simulation.envs.utils import deg2rad
@@ -33,7 +34,7 @@ class LandoBaseEnv(DroneLandoBaseEnv):
         self.penalty_terminal = penalty_terminal
         self.penalty_velocity = penalty_velocity
 
-        self.done_dist_threshold = 100
+        self.done_dist_threshold = 12
 
         # === Costs: The following constants are used for cost calculation:
         self.vel_limit = 0.25  # [m/s]
@@ -162,15 +163,16 @@ class LandoBaseEnv(DroneLandoBaseEnv):
         penalty_action_rate = self.ARP * np.linalg.norm(act_diff)
         penalty_rpy = self.penalty_angle * np.linalg.norm(self.drone.rpy)
         penalty_spin = self.penalty_spin * np.linalg.norm(self.drone.rpy_dot)
-        penalty_terminal = self.penalty_terminal if self.compute_done() else 0.
+        #penalty_terminal = self.penalty_terminal if self.compute_done() else 0.
         penalty_velocity = self.penalty_velocity * np.linalg.norm(
             self.drone.xyz_dot)
 
         penalties = np.sum([penalty_rpy, penalty_action_rate, penalty_spin,
-                            penalty_velocity, penalty_action, penalty_terminal])
+                            penalty_velocity, penalty_action])#, penalty_terminal])
         # L2 norm
         dist = np.linalg.norm(self.drone.xyz - self.target_pos)
         reward = -dist - penalties
+        print(reward)
         return reward
     
     def set_leo_actions(self):
@@ -181,7 +183,7 @@ class LandoBaseEnv(DroneLandoBaseEnv):
         yaw = self.bc.getEulerFromQuaternion(leo_w)[2]
 
         if dist < 0.15:
-            self.target_index += 1
+            self.target_index = (self.target_index + 1) % len(self.waypoints)
             self.leo_target = self.waypoints[self.target_index]
 
         # Two DOF PID Controller
@@ -199,7 +201,7 @@ class LandoBaseEnv(DroneLandoBaseEnv):
         # Note:
         #  - use copy since += operations are call by reference
         #  - init_xyz, init_xyz_dot, ... are set the SimOpt classes
-        pos = self.init_xyz.copy()
+        pos = (random.uniform(-4.5, 4.5), random.uniform(-4.5, 4.5), random.uniform(1,2))
         xyz_dot = self.init_xyz_dot.copy()
         rpy_dot = self.init_rpy_dot.copy()
         quat = self.init_quaternion.copy()
@@ -217,17 +219,24 @@ class LandoBaseEnv(DroneLandoBaseEnv):
             # PyBullet assumes world frame, so local frame -> world frame
             angularVelocity=R.T @ rpy_dot
         )
+        
+        leoStartPos = (random.uniform(-4.5, 4.5), random.uniform(-4.5, 4.5), 0.1)
 
         self.bc.resetBasePositionAndOrientation(
             self.leo,
-            posObj=self.startPos,
+            posObj=leoStartPos,
             ornObj=self.bc.getQuaternionFromEuler(self.startRPY)
         )
 
     def compute_done(self) -> bool:
         """Compute end of episode if dist(drone - ref) > d."""
         dist = np.linalg.norm(self.drone.xyz - self.target_pos)
-        done = True if dist > self.done_dist_threshold else False
+        drone_z = self.drone.xyz[2]
+        if (dist > self.done_dist_threshold) or (drone_z < 0.2):
+            done = True
+        else:
+            done = False  
+        
         return done
 
     def compute_info(self) -> dict:

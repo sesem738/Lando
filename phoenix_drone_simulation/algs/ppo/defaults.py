@@ -13,7 +13,7 @@ def defaults():
                     'activation': 'tanh'}
         },
         adv_estimation_method='gae',
-        epochs=300,  # 3.2M steps
+        epochs=600,  # 3.2M steps
         gamma=0.99,
         steps_per_epoch=32 * 1000
     )

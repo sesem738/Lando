@@ -56,5 +56,5 @@ register(
 register(
     id='LandoEnv-v0',
     entry_point='phoenix_drone_simulation.envs.lando:LandoEnv',
-    max_episode_steps=500,
+    max_episode_steps=2000,
 )

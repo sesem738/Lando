@@ -14,7 +14,7 @@ def defaults():
                     'activation': 'tanh'}
         },
         adv_estimation_method='gae',
-        epochs=300,
+        epochs=600,
         gamma=0.99,
         steps_per_epoch=32 * 1000,
         # Early stopping criterion adds robustness towards hyper-parameters
